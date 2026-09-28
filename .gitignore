@@ -1,0 +1,39 @@
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Data and generated audio
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.npy
+*.pickle
+*.pt
+*.ckpt
+*.safetensors
+models/checkpoints/
+models/weights/
+data/generated/
+data/evaluation/
+results/
+
+# OS/editor
+.DS_Store
+.vscode/
+
+# Node
+frontend/node_modules/
+frontend/dist/

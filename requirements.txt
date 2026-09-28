@@ -1,0 +1,19 @@
+fastapi==0.141.1
+uvicorn==0.53.0
+python-multipart==0.0.20
+pydantic==2.13.5
+numpy==2.5.3
+scipy==1.18.1
+librosa==1.0.0
+soundfile==0.14.0
+torch==2.14.0
+torchaudio==2.11.0
+scikit-learn==1.9.1
+pandas==3.0.6
+matplotlib==3.11.2
+pytest==9.1.1
+python-dotenv==1.2.3
+
+# Optional/selected TTS backend
+# Install this in the project venv after verifying environment support:
+# pip install f5-tts
