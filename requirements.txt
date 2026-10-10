@@ -13,7 +13,7 @@ pandas==3.0.6
 matplotlib==3.11.2
 pytest==9.1.1
 python-dotenv==1.2.3
+speechbrain==1.1.1
 
-# Optional/selected TTS backend
-# Install this in the project venv after verifying environment support:
-# pip install f5-tts
+# Selected zero-shot TTS backend
+f5-tts==1.1.22

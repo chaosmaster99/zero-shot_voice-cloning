@@ -1,12 +1,35 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+
+def _configure_ffmpeg() -> None:
+    """Make FFmpeg shared DLLs available to audio libraries on Windows."""
+    ffmpeg_bin = os.getenv("FFMPEG_BIN")
+    candidates = [Path(ffmpeg_bin)] if ffmpeg_bin else []
+    ffmpeg_executable = shutil.which("ffmpeg")
+    if ffmpeg_executable:
+        candidates.append(Path(ffmpeg_executable).parent)
+    candidates.extend(Path(path) for path in os.getenv("PATH", "").split(os.pathsep) if path)
+    candidates.extend(Path(path) for path in Path(os.getenv("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Packages").glob("**/bin"))
+
+    for candidate in candidates:
+        if not candidate.is_dir() or not (candidate / "ffmpeg.exe").exists():
+            continue
+        os.environ["PATH"] = str(candidate) + os.pathsep + os.environ.get("PATH", "")
+        if hasattr(os, "add_dll_directory"):
+            os.add_dll_directory(str(candidate))
+        return
+
+
+_configure_ffmpeg()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"
