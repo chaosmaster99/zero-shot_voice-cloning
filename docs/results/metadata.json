@@ -1,0 +1,43 @@
+{
+  "created": "2026-10-11T21:16:42.865278+00:00",
+  "git_commit": "374779d",
+  "backbone": "f5-tts",
+  "tts_checkpoint": "F5TTS_v1_Base",
+  "nfe_steps": 32,
+  "seed": 42,
+  "baseline_source": "zero_shot_tts",
+  "speakers": [
+    "basic_ref_en",
+    "voice_country",
+    "voice_main",
+    "voice_town"
+  ],
+  "sentences": [
+    "The quick brown fox jumps over the lazy dog. It then disappears into the forest near the river bank.",
+    "Please call Stella and ask her to bring these things from the store. We will meet again on Thursday.",
+    "We are planning a small meeting next week. The final results will be reviewed by the whole team.",
+    "Speech processing lets machines listen and understand. They can also respond to human voices.",
+    "Welcome to our speech processing project. Today we explore how prosody shapes meaning."
+  ],
+  "n_rows": 640,
+  "finalized_from_csv": false,
+  "elapsed_seconds": 306.7043904000893,
+  "speaker_encoder": "speechbrain/spkrec-ecapa-voxceleb",
+  "asr": "openai/whisper-base.en",
+  "system": {
+    "python": "3.12.13",
+    "os": "Windows-11-10.0.26200-SP0",
+    "packages": {
+      "torch": "2.11.0+cu128",
+      "f5-tts": "1.1.22",
+      "speechbrain": "1.1.1",
+      "transformers": "5.19.0",
+      "librosa": "1.0.0",
+      "praat-parselmouth": "0.4.7",
+      "numpy": "2.5.4",
+      "fastapi": "0.143.0"
+    },
+    "cuda_available": true,
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU"
+  }
+}
