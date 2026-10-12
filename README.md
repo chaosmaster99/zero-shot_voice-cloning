@@ -225,6 +225,10 @@ backend/
 frontend/         React + Vite + Tailwind studio
 experiments/      run_study.py (full study), plot_study.py, single-purpose scripts
 docs/PROSODY.md   prosody method
+docs/results/     committed study outputs (tables, figures)
+report/           IEEE-style paper draft (LaTeX)
+STUDY_GUIDE.md    learning guide: theory, code walkthrough, viva questions
+context.md        complete project context (for slides, learning, Q&A)
 tests/
 ```
 

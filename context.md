@@ -132,6 +132,7 @@ experiments/
 scripts/download_models.py, prepare_demo_references.py
 tests/                       10 test modules (signal, API, pipeline, text, presets, audio, ...)
 docs/PROSODY.md, docs/results/   method write-up + committed study outputs (summary.md, results.csv, PNGs)
+report/echo_report.tex       IEEE-conference paper draft (project called "Echo" in the paper; author fields are placeholders)
 models/README.md             which pretrained models are used (no weights stored)
 PROJECT_SPEC.md, IMPLEMENTATION_PLAN.md, README.md, STUDY_GUIDE.md, context.md
 requirements.txt (flexible), requirements.lock.txt (exact verified env), .env.example, pytest.ini

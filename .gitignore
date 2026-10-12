@@ -39,3 +39,7 @@ data/evaluation/
 # Node
 frontend/node_modules/
 frontend/dist/
+
+# Tooling
+.impeccable/
+.claude/
