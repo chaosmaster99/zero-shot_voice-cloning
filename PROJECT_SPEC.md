@@ -1138,9 +1138,6 @@ controllable-voice-cloning/
 │       ├── main.jsx
 │       └── index.css
 │
-├── models/
-│   └── README.md
-│
 ├── data/
 │   ├── references/
 │   ├── generated/

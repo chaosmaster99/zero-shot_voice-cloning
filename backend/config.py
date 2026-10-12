@@ -37,7 +37,6 @@ GENERATED_DIR = DATA_DIR / "generated"
 EVALUATION_DIR = DATA_DIR / "evaluation"
 REFERENCES_DIR = DATA_DIR / "references"
 RESULTS_DIR = PROJECT_ROOT / "results"
-MODELS_DIR = PROJECT_ROOT / "models"
 
 DEVICE = os.getenv("DEVICE", "auto")  # auto | cuda | cpu
 MODEL_NAME = os.getenv("MODEL_NAME", "f5-tts")
@@ -61,7 +60,7 @@ CORS_ORIGINS = [
     if origin.strip()
 ]
 
-for _directory in (OUTPUT_DIRECTORY, REFERENCES_DIR, EVALUATION_DIR, RESULTS_DIR, MODELS_DIR):
+for _directory in (OUTPUT_DIRECTORY, REFERENCES_DIR, EVALUATION_DIR, RESULTS_DIR):
     _directory.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_PROSODY = {
