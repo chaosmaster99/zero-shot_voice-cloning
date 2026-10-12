@@ -73,9 +73,10 @@ npm run dev
 
 ## Backend setup
 
+Run this from the repository root (the directory containing `backend`, `frontend`, and `requirements.txt`):
+
 ```bash
-cd backend
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ## GPU requirements
@@ -83,6 +84,13 @@ python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 This project is designed to run on CPU by default and can be configured for GPU if available. The environment used for this implementation reported no CUDA-enabled GPU in the active shell, so GPU execution is optional and should be enabled only when supported by the installed TTS backend and CUDA drivers.
 
 ## Running the project
+
+### Recording a reference voice
+
+In the frontend, click **Record sample**, read the displayed sentence naturally for
+5–10 seconds, and click **Stop recording**. The browser recording is converted to a
+WAV reference file automatically, and the displayed sentence is submitted as the
+F5-TTS reference transcript. Microphone access must be allowed by the browser.
 
 ### Health check
 

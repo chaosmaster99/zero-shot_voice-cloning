@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
+const REFERENCE_PROMPT = 'Hello, this is my voice sample for the speech processing project. I am speaking clearly and naturally so my voice can be cloned.'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const initialSettings = {
   pitch: 0,
   energy: 0,
@@ -14,8 +16,14 @@ function App() {
   const [text, setText] = useState('Welcome to our Speech Processing project.')
   const [settings, setSettings] = useState(initialSettings)
   const [isLoading, setIsLoading] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [recordingPreviewUrl, setRecordingPreviewUrl] = useState('')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+  const mediaRecorderRef = useRef(null)
+  const recordingChunksRef = useRef([])
+  const recordingTimerRef = useRef(null)
 
   const metrics = useMemo(() => result?.metrics ?? {
     speaker_similarity: 0.0,
@@ -26,9 +34,89 @@ function App() {
     rtf: 0.0,
   }, [result])
 
+  useEffect(() => () => {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current)
+    }
+    if (recordingPreviewUrl) {
+      URL.revokeObjectURL(recordingPreviewUrl)
+    }
+  }, [recordingPreviewUrl])
+
+  const handleRecording = async () => {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop()
+      return
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setError('Audio recording is not supported in this browser. Try the latest Chrome or Edge.')
+      return
+    }
+
+    try {
+      setError('')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+        .find((type) => MediaRecorder.isTypeSupported(type))
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+
+      recordingChunksRef.current = []
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordingChunksRef.current.push(event.data)
+        }
+      }
+      recorder.onerror = () => {
+        stream.getTracks().forEach((track) => track.stop())
+        setIsRecording(false)
+        setError('The recording could not be completed. Please check microphone permissions and try again.')
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop())
+        if (recordingTimerRef.current) {
+          window.clearInterval(recordingTimerRef.current)
+          recordingTimerRef.current = null
+        }
+
+        try {
+          const recordedBlob = new Blob(recordingChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+          const wavBlob = await convertToWav(recordedBlob)
+          const file = new File([wavBlob], 'recorded-reference.wav', { type: 'audio/wav' })
+          setReferenceFile(file)
+          setReferenceText(REFERENCE_PROMPT)
+          setRecordingPreviewUrl(URL.createObjectURL(wavBlob))
+          setError('')
+        } catch {
+          setError('The recording format could not be converted. Please try recording again in Chrome or Edge.')
+        } finally {
+          setIsRecording(false)
+        }
+      }
+
+      mediaRecorderRef.current = recorder
+      recorder.start()
+      setRecordingSeconds(0)
+      setIsRecording(true)
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingSeconds((seconds) => seconds + 1)
+      }, 1000)
+    } catch {
+      setError('Microphone access was denied or unavailable. Allow microphone access and try again.')
+    }
+  }
+
   const handleGenerate = async () => {
     if (!referenceFile) {
       setError('Please upload a reference audio file first.')
+      return
+    }
+    if (!referenceText.trim()) {
+      setError('Please enter the exact sentence spoken in the reference audio.')
+      return
+    }
+    if (!text.trim()) {
+      setError('Please enter text to synthesize.')
       return
     }
 
@@ -46,19 +134,33 @@ function App() {
       formData.append('pause', String(settings.pause))
       formData.append('emotion', settings.emotion)
 
-      const response = await fetch('http://localhost:8000/synthesize', {
-        method: 'POST',
-        body: formData,
-      })
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => controller.abort(), 10 * 60 * 1000)
+      let response
+      try {
+        response = await fetch(`${API_BASE_URL}/synthesize`, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        })
+      } finally {
+        window.clearTimeout(timeoutId)
+      }
 
-      const payload = await response.json()
+      const responseText = await response.text()
+      let payload
+      try {
+        payload = JSON.parse(responseText)
+      } catch {
+        throw new Error(`The backend returned an invalid response (HTTP ${response.status}).`)
+      }
       if (!response.ok) {
         throw new Error(payload.detail || 'Synthesis failed.')
       }
 
       setResult(payload)
     } catch (err) {
-      setError(err.message)
+      setError(err.name === 'AbortError' ? 'Synthesis timed out after 10 minutes. Check the backend logs and try again.' : err.message)
     } finally {
       setIsLoading(false)
     }
@@ -80,12 +182,37 @@ function App() {
               <div className="flex flex-wrap items-center gap-3">
                 <label className="inline-flex cursor-pointer rounded-xl border border-indigo-500 bg-indigo-500/10 px-4 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-500/20">
                   Upload audio
-                  <input type="file" accept="audio/*" className="hidden" onChange={(e) => setReferenceFile(e.target.files?.[0] ?? null)} />
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      setReferenceFile(e.target.files?.[0] ?? null)
+                      setReferenceText(REFERENCE_PROMPT)
+                      setError('')
+                    }}
+                  />
                 </label>
-                <button className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-200">Record</button>
+                <button
+                  type="button"
+                  onClick={handleRecording}
+                  className={`rounded-xl border px-4 py-2 text-sm text-slate-200 ${isRecording ? 'border-red-500 bg-red-500/15 text-red-200' : 'border-slate-700 bg-slate-800 hover:bg-slate-700'}`}
+                >
+                  {isRecording ? `Stop recording (${recordingSeconds}s)` : 'Record sample'}
+                </button>
+              </div>
+              <div className="mt-4 rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 text-sm text-indigo-100">
+                <div className="font-medium">Read this sentence aloud (5–10 seconds)</div>
+                <p className="mt-1 text-indigo-200">{REFERENCE_PROMPT}</p>
+                <p className="mt-2 text-xs text-indigo-300">Your recording will be converted to WAV and used as the reference voice.</p>
               </div>
               <div className="mt-5 h-24 rounded-xl border border-dashed border-slate-700 bg-slate-950/60 p-3 text-sm text-slate-400">
-                {referenceFile ? `Selected: ${referenceFile.name}` : 'No reference audio selected yet.'}
+                {referenceFile ? (
+                  <div>
+                    <div>Selected: {referenceFile.name}</div>
+                    {recordingPreviewUrl && <audio controls src={recordingPreviewUrl} className="mt-2 w-full" />}
+                  </div>
+                ) : 'No reference audio selected yet.'}
               </div>
               <input
                 value={referenceText}
@@ -163,6 +290,45 @@ function App() {
   )
 }
 
+async function convertToWav(blob) {
+  const audioContext = new AudioContext()
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(await blob.arrayBuffer())
+    const channelCount = audioBuffer.numberOfChannels
+    const sampleCount = audioBuffer.length
+    const wavBuffer = new ArrayBuffer(44 + sampleCount * 2)
+    const view = new DataView(wavBuffer)
+    const writeString = (offset, value) => [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)))
+    const writeUint16 = (offset, value) => view.setUint16(offset, value, true)
+    const writeUint32 = (offset, value) => view.setUint32(offset, value, true)
+
+    writeString(0, 'RIFF')
+    writeUint32(4, 36 + sampleCount * 2)
+    writeString(8, 'WAVE')
+    writeString(12, 'fmt ')
+    writeUint32(16, 16)
+    writeUint16(20, 1)
+    writeUint16(22, 1)
+    writeUint32(24, audioBuffer.sampleRate)
+    writeUint32(28, audioBuffer.sampleRate * 2)
+    writeUint16(32, 2)
+    writeUint16(34, 16)
+    writeString(36, 'data')
+    writeUint32(40, sampleCount * 2)
+
+    const channels = Array.from({ length: channelCount }, (_, index) => audioBuffer.getChannelData(index))
+    for (let index = 0; index < sampleCount; index += 1) {
+      const sample = channels.reduce((sum, channel) => sum + channel[index], 0) / channelCount
+      const clamped = Math.max(-1, Math.min(1, sample))
+      view.setInt16(44 + index * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true)
+    }
+
+    return new Blob([wavBuffer], { type: 'audio/wav' })
+  } finally {
+    await audioContext.close()
+  }
+}
+
 function ControlRow({ label, value, min, max, step, onChange, suffix }) {
   return (
     <div>
@@ -193,7 +359,7 @@ function ResultCard({ title, value }) {
 }
 
 function AudioPanel({ title, audioUrl }) {
-  const playableUrl = audioUrl ? `http://localhost:8000/audio/${audioUrl.split(/[\\/]/).pop()}` : undefined
+  const playableUrl = audioUrl ? `${API_BASE_URL}/audio/${audioUrl.split(/[\\/]/).pop()}` : undefined
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
