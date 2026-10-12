@@ -41,6 +41,10 @@ def word_error_rate(reference: str, hypothesis: str) -> float:
 
 
 def compute_wer_from_asr(reference_text: str, asr_transcript: str) -> float:
-    if not reference_text or not asr_transcript:
-        raise ValueError("Reference text and ASR transcript are required to compute WER.")
-    return word_error_rate(reference_text, asr_transcript)
+    """WER of an ASR transcript against the text the TTS was asked to say.
+
+    An empty transcript is a legitimate ASR outcome (everything deleted) and scores 1.0.
+    """
+    if not normalize_text(reference_text or ""):
+        raise ValueError("Reference text is required to compute WER.")
+    return word_error_rate(reference_text, asr_transcript or "")

@@ -13,6 +13,7 @@ __pycache__/
 .env
 .env.local
 .env.*
+!.env.example
 
 # Data and generated audio
 *.wav
@@ -27,8 +28,9 @@ __pycache__/
 models/checkpoints/
 models/weights/
 data/generated/
+data/references/
 data/evaluation/
-results/
+/results/
 
 # OS/editor
 .DS_Store

@@ -1,58 +1,80 @@
 from __future__ import annotations
 
-import uuid
-import time
-from pathlib import Path
+import logging
+from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from backend.api.schemas.synthesis import SynthesisRequest, SynthesisResponse
-from backend.audio.preprocessing import preprocess_reference_audio, save_audio
-from backend.config import OUTPUT_DIRECTORY
-from backend.core.tts_engine import get_tts_engine
-from backend.evaluation.speaker_similarity import calculate_speaker_similarity
-from backend.evaluation.wer import compute_wer_from_asr
-from backend.evaluation.runtime import evaluate_generated_audio
+from backend.api.deps import guarded, new_request_id, save_upload
+from backend.api.schemas.synthesis import SynthesisResponse
+from backend.config import MAX_TEXT_CHARS, OUTPUT_DIRECTORY
+from backend.core.pipeline import synthesize_with_prosody
 
 router = APIRouter()
+logger = logging.getLogger("voice_cloning")
+
+
+def build_urls(files: dict) -> dict:
+    return {name: f"/audio/{filename}" for name, filename in files.items()}
 
 
 @router.post("/synthesize", response_model=SynthesisResponse)
-async def synthesize(
-    reference_audio: UploadFile = File(...),
-    reference_text: str = Form(...),
-    text: str = Form(...),
-    pitch: float = Form(0.0),
-    energy: float = Form(0.0),
-    rate: float = Form(1.0),
-    pause: float = Form(1.0),
-    emotion: str = Form("neutral"),
+def synthesize(
+    reference_audio: UploadFile = File(..., description="5-10 second recording of the target speaker."),
+    text: str = Form(..., description="Text to synthesize."),
+    reference_text: str = Form("", description="Transcript of the reference; transcribed with Whisper when empty."),
+    emotion: str = Form("neutral", description="Preset key or 'custom'."),
+    pitch: Optional[float] = Form(None),
+    pitch_range: Optional[float] = Form(None),
+    pitch_slope: Optional[float] = Form(None, description="Semitones/second added per phrase."),
+    tremor: Optional[float] = Form(None, description="5.5 Hz F0 tremor depth in semitones."),
+    energy: Optional[float] = Form(None),
+    brightness: Optional[float] = Form(None, description="Spectral tilt above 1 kHz in dB."),
+    rate: Optional[float] = Form(None),
+    pause: Optional[float] = Form(None),
+    seed: Optional[int] = Form(None),
 ):
-    request_id = str(uuid.uuid4())
-    if not text.strip():
+    text = text.strip()
+    if not text:
         raise HTTPException(status_code=400, detail="Text must not be empty.")
+    if len(text) > MAX_TEXT_CHARS:
+        raise HTTPException(status_code=400, detail=f"Text is limited to {MAX_TEXT_CHARS} characters.")
+
+    request_id = new_request_id()
+    source_path = save_upload(reference_audio, request_id, "reference")
+
+    def work():
+        result = synthesize_with_prosody(
+            request_id=request_id,
+            reference_path=source_path,
+            reference_text=reference_text,
+            text=text,
+            output_dir=OUTPUT_DIRECTORY,
+            emotion=emotion,
+            overrides={
+                "pitch": pitch, "pitch_range": pitch_range, "pitch_slope": pitch_slope, "tremor": tremor,
+                "energy": energy, "brightness": brightness, "rate": rate, "pause": pause,
+            },
+            seed=seed,
+        )
+        logger.info(
+            "synthesis request=%s model=%s emotion=%s prosody=%s ref=%.1fs chars=%d tts=%.2fs prosody_t=%.2fs eval=%.2fs total=%.2fs",
+            request_id,
+            result["run"]["model"],
+            result["emotion"],
+            result["prosody"],
+            result["reference"]["duration"],
+            len(text),
+            result["timings"]["tts"],
+            result["timings"]["prosody"],
+            result["timings"].get("evaluation", 0.0),
+            result["timings"]["total"],
+        )
+        return result
 
     try:
-        started_at = time.perf_counter()
-        source_path = Path(OUTPUT_DIRECTORY) / f"{request_id}_reference{Path(reference_audio.filename or '.wav').suffix}"
-        source_path.write_bytes(await reference_audio.read())
-        ref_audio, sr = preprocess_reference_audio(source_path)
-        baseline_path = Path(OUTPUT_DIRECTORY) / f"{request_id}_baseline.wav"
-        controlled_path = Path(OUTPUT_DIRECTORY) / f"{request_id}_controlled.wav"
-
-        engine = get_tts_engine()
-        engine.synthesize(source_path, text, baseline_path, reference_text=reference_text)
-        from backend.prosody.controller import ProsodyController
-        import soundfile as sf
-
-        generated, output_sr = sf.read(str(baseline_path), always_2d=False)
-        controlled = ProsodyController(pitch=pitch, energy=energy, rate=rate, pause=pause).apply(generated, output_sr)
-        save_audio(controlled_path, controlled, output_sr)
-
-        metrics = evaluate_generated_audio(source_path, controlled_path, text)
-        metrics["rtf"] = float((time.perf_counter() - started_at) / max(metrics["duration"], 1e-6))
-        return SynthesisResponse(success=True, request_id=request_id, baseline_audio=str(baseline_path), controlled_audio=str(controlled_path), metrics=metrics)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
+        result = guarded(request_id, work)
+    finally:
+        source_path.unlink(missing_ok=True)
+    result["urls"] = build_urls(result["files"])
+    return result
