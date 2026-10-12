@@ -6,6 +6,12 @@ given order), Part 4 (results), then drill Part 6 (viva questions). Exact number
 
 Suggested study time: ~6–8 hours (1 h idea, 2 h theory, 2–3 h code, 1 h results, 1 h viva drill).
 
+**Current repository map.** `backend/` is the FastAPI and DSP implementation, `frontend/` is the React
+studio, `experiments/` contains the reproducible study runners, `docs/results/` contains the committed
+study outputs, `data/` is runtime input/output storage, and `tests/` contains fast tests that use
+synthetic audio and test doubles. Model weights are not stored in the repository; Hugging Face and
+SpeechBrain download them to the user cache on first use.
+
 ---
 
 ## Part 1 — The idea in 5 minutes
@@ -178,7 +184,9 @@ Key formulas:
 - Presets on clones: similarity 0.72–0.79, WER ≤ 3 %; mean control error tiny (pitch 0.33 pp, brightness 0.014 dB).
 - Emotion recogniser barely shifts (≈ 70–80 % "neutral" everywhere) → DSP-only prosody is a weak
   emotion cue; human test needed.
-- Latency: ~4–7 s warm GPU per request; RTF ≈ 0.8.
+- Latency: ~4–7 s warm GPU per request; RTF ≈ 0.8 in the recorded RTX 4060 study. CPU inference is
+  substantially slower (the local CPU smoke run was roughly 6–7× real time), so do not quote the GPU
+  number as a universal performance guarantee.
 
 Figures to show: `docs/results/control_accuracy.png`, `identity_prosody_tradeoff.png`,
 `ablation.png`, `presets.png`, `single_controls_similarity.png`.
@@ -191,10 +199,43 @@ the real cost is speaker identity, mostly from pitch and rate shifts."*
 ## Part 5 — Run it yourself (to understand by doing)
 
 ```powershell
-python -m pytest -q                                           # prove the DSP behaves
-python experiments/evaluation/run_prosody_experiment.py --input data/references/voice_main.wav --output-dir out --report out/report.json
-python -m uvicorn backend.main:app --port 8000                # then open http://localhost:8000/docs
-cd frontend ; npm run dev                                     # studio on :5173
+# from the repository root, with .venv activated
+python -m pytest -q                                           # prove the DSP and API behave
+python scripts/prepare_demo_references.py                     # optional: create demo references
+python -m uvicorn backend.main:app --reload --port 8000       # API and docs on :8000
+cd frontend
+npm install
+npm run dev                                                    # studio on :5173
+```
+
+For a real web-studio run, open `http://localhost:5173`, upload or record a clear 5–10 second
+reference, enter its transcript (or leave it blank for Whisper auto-transcription), enter target
+text, choose a preset or adjust the controls, and select **Generate speech**. The first real request
+downloads F5-TTS, Whisper, and ECAPA weights and can take several minutes on CPU.
+
+On Windows, FFmpeg must be the **shared** build because `torchaudio`/TorchCodec needs its DLLs.
+The backend automatically discovers a WinGet installation. If FFmpeg is installed elsewhere, set
+`FFMPEG_BIN` in `.env` to its `bin` directory before starting Uvicorn. A quick diagnostic is:
+
+```powershell
+python -c "import backend.config, torchaudio; print(torchaudio.load('data/references/test1.wav')[0].shape)"
+```
+
+If the project is recreated on another machine, use Python 3.10–3.12 for the locked environment
+when possible, install `requirements.txt`, and install the frontend dependencies with `npm install`.
+Do not commit `.venv`, `node_modules`, generated audio, model weights, or experiment output folders.
+
+Useful direct commands:
+
+```powershell
+# one zero-shot generation (reference transcript is optional)
+python experiments/zero_shot/run_zero_shot.py --reference data/references/test1.wav --text "Hello there."
+
+# DSP-only experiment on any WAV file
+python experiments/evaluation/run_prosody_experiment.py --input clip.wav --output-dir out --report out/report.json
+
+# complete multi-speaker study, after adding <speaker>.wav and <speaker>.txt files
+python experiments/run_study.py --references-dir data/references --output-dir results/study
 ```
 
 Exercises:
@@ -246,6 +287,12 @@ Exercises:
 27. How do the tests avoid needing GPUs/models? *(synthetic speech-like signal; TTS and eval test doubles)*
 28. How is reproducibility ensured? *(seed, NFE, metadata.json with versions/GPU/git commit, lockfile)*
 29. Ethical considerations? *(consent, impersonation notice, CC-BY-NC weights)*
+30. Why can a fresh Windows setup fail before synthesis? *(TorchCodec may not find FFmpeg shared
+  DLLs; the backend config adds the discovered FFmpeg `bin` directory to PATH/DLL search.)*
+31. Where do model weights live? *(outside the repository in Hugging Face/SpeechBrain caches; the
+  repository contains no trained or downloaded checkpoints.)*
+32. Why can tests pass without downloading models? *(API and pipeline tests inject TTS/evaluation test
+  doubles; a real web request still requires the pretrained weights.)*
 
 ---
 
